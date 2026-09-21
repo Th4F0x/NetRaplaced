@@ -10,4 +10,9 @@ pub fn build(b: *std.Build) void {
     });
 
     b.installArtifact(exe);
+
+    // run comand "zig build run"
+    const run_exe = b.addRunArtifact(exe);
+    const run_step = b.step("run", "Run");
+    run_step.dependOn(&run_exe.step);
 }
