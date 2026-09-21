@@ -2,7 +2,7 @@
     .name = .NetRaplaced,
     .version = "0.0.1",
     .fingerprint = 0x83442533942cfb6b,
-    .minimum_zig_version = "0.17.0-dev.2127+e90365cd5",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{},
     .paths = .{
         "build.zig",
