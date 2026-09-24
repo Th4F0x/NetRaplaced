@@ -1,0 +1,90 @@
+const std = @import("std");
+const html = @import("html");
+const options: html.ParseOptions = .{ .non_destructive = true };
+
+pub fn run() !void {
+    try runBufferCase();
+    try runMappedFileCase();
+}
+
+fn runBufferCase() !void {
+    var input = "<div id='x' data-v='a&amp;b'> hi &amp; bye </div>".*;
+    const original = input;
+    var doc = try options.parse(std.testing.allocator, &input);
+    defer doc.deinit();
+    const gpa = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(gpa);
+    defer arena.deinit();
+
+    var divs = doc.query("div#x");
+    const node = (try divs.next()) orelse return error.TestUnexpectedResult;
+    try std.testing.expectEqualStrings("a&b", (try node.getAttributeValue(arena.allocator(), "data-v")).?.value);
+    const text = try node.innerTextWithOptions(gpa, .{});
+    defer text.free(gpa);
+    try std.testing.expectEqualStrings("hi & bye", text.value);
+
+    try std.testing.expectEqualSlices(u8, original[0..], input[0..]);
+
+    const rendered = try std.fmt.allocPrint(std.testing.allocator, "{f}", .{doc});
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expectEqualStrings(original[0..], rendered);
+}
+
+fn runMappedFileCase() !void {
+    const io = std.testing.io;
+    var rand_src: std.Random.IoSource = .{ .io = io };
+    const path = try std.fmt.allocPrint(std.testing.allocator, "/tmp/htmlparser-example-nondestructive-{x}.html", .{
+        rand_src.interface().int(u64),
+    });
+    defer std.testing.allocator.free(path);
+
+    const html_bytes = "<section id='mapped'>a &amp; b</section>";
+    const file = try std.Io.Dir.createFileAbsolute(io, path, .{
+        .read = true,
+        .truncate = true,
+        .exclusive = true,
+    });
+    defer {
+        file.close(io);
+        std.Io.Dir.deleteFileAbsolute(io, path) catch {};
+    }
+
+    try file.setLength(io, html_bytes.len);
+
+    var init_map = try std.Io.File.MemoryMap.create(io, file, .{
+        .len = html_bytes.len,
+        .populate = false,
+        .undefined_contents = false,
+        .protection = .{ .read = true, .write = true },
+    });
+    @memcpy(init_map.memory[0..html_bytes.len], html_bytes);
+    init_map.destroy(io);
+
+    var mapped = try std.Io.File.MemoryMap.create(io, file, .{
+        .len = html_bytes.len,
+        .populate = false,
+        .undefined_contents = false,
+        .protection = .{ .read = true, .write = false },
+    });
+    defer mapped.destroy(io);
+
+    var doc = try options.parse(std.testing.allocator, mapped.memory);
+    defer doc.deinit();
+
+    var sections = doc.query("section#mapped");
+    const node = (try sections.next()) orelse return error.TestUnexpectedResult;
+    const gpa = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(gpa);
+    defer arena.deinit();
+    const text = try node.innerTextWithOptions(gpa, .{});
+    defer text.free(gpa);
+    try std.testing.expectEqualStrings("a & b", text.value);
+    try std.testing.expectEqualStrings(html_bytes, mapped.memory);
+    const rendered = try std.fmt.allocPrint(std.testing.allocator, "{f}", .{doc});
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expectEqualStrings(html_bytes, rendered);
+}
+
+test "non-destructive parse preserves original bytes for buffers and mapped files" {
+    try run();
+}
