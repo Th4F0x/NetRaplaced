@@ -24,6 +24,7 @@ pub fn main(init: std.process.Init) !void {
         .response_writer = &response_body.writer,
     });
 
+    // проверка get запроса
     if (res.status != .ok) {
         std.debug.print("ошибка http {}", .{res.status});
     }
@@ -42,7 +43,7 @@ pub fn main(init: std.process.Init) !void {
     // счётчик для цикла
     var count: usize = 0;
 
-    while ( try links.next()) |node| {
+    while (try links.next()) |node| {
         count += 1;
 
         // попытка получения текста с данного селектора
