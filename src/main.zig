@@ -1,6 +1,7 @@
 const std = @import("std");
 const zh = @import("html");
 
+// main fnGG
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
     const io = init.io;
